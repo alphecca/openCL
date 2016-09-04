@@ -107,9 +107,58 @@ int main(){
 	cl_mem bufA, bufB, bufC;
 	bufA = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int)*16384, NULL, &err);
 	CHECK_ERROR(err);
+	bufB = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int)*16384, NULL, &err);
+	CHECK_ERROR(err);
+	bufC = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(int)*16384, NULL, &err);
+	CHECK_ERROR(err);
+
+	err = clEnqueueWriteBuffer(queue, bufA, CL_FALSE, 0, sizeof(int)*16384, A, 0, NULL, NULL);
+	CHECK_ERROR(err);
+	err = clEnqueueWriteBuffer(queue, bufB, CL_FALSE, 0, sizeof(int)*16384, B, 0, NULL, NULL);
+	CHECK_ERROR(err);
+	//@NOTE blocking_write==CL_TRUE : 동기화를 의미. 버퍼쓰기가 완료된 다음에 return.
+	//@NOTE blocking_write==CL_FALSE : 비동기화를 의미. 커맨드가 큐에 enqueue되자마자 return. 완료시점파악을 위해 이벤트 사용.
+
+	//커널 인자 설정 : arg_value를 arg_index번 인자로 넘기기
+	err=clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufA);
+	CHECK_ERROR(err);
+	err=clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufB);
+	CHECK_ERROR(err);
+	err=clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufC);
+	CHECK_ERROR(err);
+
+	//커널 실행 : work_dim 차원의 커널 인덱스 공간을 만든다.
+	size_t global_size = 16384;
+	size_t local_size = 256;
+	err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+	CHECK_ERROR(err);
+
+	//버퍼 읽기
+	err = clEnqueueReadBuffer(queue, bufC, CL_TRUE, 0, sizeof(int)*16384, C, 0, NULL, NULL);
+	CHECK_ERROR(err);
+
+	for(i=0;i<16384; i++){
+		if(A[i] +B[i] != C[i]){
+			printf("Verification failed! A[%d] = %d, B[%d] = %d, C[%d] = %d\n", i, A[i], i, B[i], i, C[i]);
+			break;
+		}
+	}
+	if(i==16384)	printf("Verification success!\n");
+
+	clReleaseMemObject(bufA);
+	clReleaseMemObject(bufB);
+	clReleaseMemObject(bufC);
+	free(A);
+	free(B);
+	free(C);
+	clReleaseKernel(kernel);
+	clReleaseProgram(program);
+	clReleaseCommandQueue(queue);
+	clReleaseContext(context);
 
 	return 0;
 }
+
 
 
 
