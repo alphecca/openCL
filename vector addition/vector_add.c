@@ -29,6 +29,17 @@ char *get_source_code(const char *file_name, size_t *len){
 		exit(EXIT_FAILURE);
 	}
 
+	fseek(file, 0, SEEK_END);
+	length = (size_t)ftell(file);
+	rewind(file);
+
+	source_code = (char *)malloc(length+1);
+	fread(source_code, length, 1, file);
+	source_code[length] = '\0';
+
+	fclose(file);
+
+	*len = length;
 	return source_code;
 }
 
