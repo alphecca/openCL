@@ -19,6 +19,19 @@
 		exit(EXIT_FAILURE); \
 	}
 
+//소스 코드를 파일에서 읽어 들이기
+char *get_source_code(const char *file_name, size_t *len){
+	char *source_code;
+	size_t length;
+	FILE *file = fopen(file_name, "r");
+	if(file == NULL){
+		printf("[%s:%d] Failed to open %s\n", __FILE__, __LINE__, file_name);
+		exit(EXIT_FAILURE);
+	}
+
+	return source_code;
+}
+
 
 
 
