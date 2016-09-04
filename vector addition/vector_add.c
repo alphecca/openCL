@@ -72,7 +72,7 @@ int main(){
 	program = clCreateProgramWithSource(context, 1, (const char**)&kernel_source, &kernel_source_size, &err);
 	CHEKC_ERROR(err);
 
-	//컴파일 에러 메시지 출력
+	//프로그램 빌드 및 컴파일 에러 메시지 출력
 	err= clBuildProgram(program, 1, &device, "", NULL, NULL);
 	if(err==CL_BUILD_PROGRAM_FAILURE){
 		size_t log_size;
@@ -90,7 +90,23 @@ int main(){
 	CHECK_ERROR(err);
 
 	//이름이 vec_add인 커널 함수에 대한 커널 오브젝트 만들기
+	//@NOTE 커널 오브젝트는 프로그램이 빌드된 다음 만들어야 함
 	kernel = clCreateKernel(program, "vec_add", &err);
+	CHECK_ERROR(err);
+
+	int *A = (int*)malloc(sizeof(int)*16384);
+	int *B = (int*)malloc(sizeof(int)*16384);
+	int *C = (int*)malloc(sizeof(int)*16384);
+	int i;
+
+	for(i=0;i<16384;i++){
+		A[i] = rand()%100;
+		B[i] = rand()%100;
+	}
+
+	cl_mem bufA, bufB, bufC;
+	bufA = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int)*16384, NULL, &err);
+	CHECK_ERROR(err);
 
 	return 0;
 }
