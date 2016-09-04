@@ -10,6 +10,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>//NULL 사용
 #include <CL/cl.h>
 
 //오류 처리
@@ -44,7 +45,55 @@ char *get_source_code(const char *file_name, size_t *len){
 }
 
 //main function
+int main(){
+	cl_platform_id platform;
+	cl_device_id device;
+	cl_context context;
+	cl_command_queue queue;
+	cl_program program;
+	char *kernel_source;
+	size_t kernel_source_size;
+	cl_kernel kernel;
+	cl_int err;
 
+	err=clGetPlatformIDs(1, &platform, NULL);
+	CHECK_ERROR(err);
+
+	err=clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+	CHECK_ERROR(err);
+
+	err=clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+	CHECK_ERROR(err);
+
+	queue = clCreateCommandQueue(context, device, 0, &err);
+	CHECK_ERROR(err);
+
+	kernel_source = get_source_code("kernel.cl", &kernel_source_size);
+	program = clCreateProgramWithSource(context, 1, (const char**)&kernel_source, &kernel_source_size, &err);
+	CHEKC_ERROR(err);
+
+	//컴파일 에러 메시지 출력
+	err= clBuildProgram(program, 1, &device, "", NULL, NULL);
+	if(err==CL_BUILD_PROGRAM_FAILURE){
+		size_t log_size;
+		char *log;
+
+		err= clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+		CHECK_ERROR(err);
+
+		log=(char*)malloc(log_size+1);
+		err= clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+		log[log_size] = '\0';
+		printf("Compile error:\n%s\n", log);
+		free(log);
+	}
+	CHECK_ERROR(err);
+
+	//이름이 vec_add인 커널 함수에 대한 커널 오브젝트 만들기
+	kernel = clCreateKernel(program, "vec_add", &err);
+
+	return 0;
+}
 
 
 
