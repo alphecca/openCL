@@ -21,7 +21,6 @@ float c[NDIM][NDIM];
 int print_matrix = 0;
 int validation = 0;
 
-
 void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 {
 	//declaration
