@@ -35,24 +35,26 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	cl_kernel kernel;
 	cl_int err;
 
-
+	/*get platform & device info.*/
 	err=clGetPlatformIDs(1, &platform, NULL);
 	CHECK_ERROR(err);
 
 	err=clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
 	CHECK_ERROR(err);
 
+	/*make context, command-queue*/
 	err=clCreateContext(NULL, 1, &device, NULL, NULL, &err);
 	CHECK_ERROR(err);
 
 	queue = clCreateCommandQueue(context, device, 0, &err);
 	CHECK_ERROR(err);
 
+	/*make program object*/
 	kernel_source = get_source_code("kernel.cl", &kernel_source_size);
 	program = clCreateProgramWithSource(context, 1, (const char**)&kernel_source, &kernel_source_size, &err);
 	CHEKC_ERROR(err);
 
-	//프로그램 빌드 및 컴파일 에러 메시지 출력
+	/*program build and compile*/
 	err= clBuildProgram(program, 1, &device, "", NULL, NULL);
 	if(err==CL_BUILD_PROGRAM_FAILURE){
 		size_t log_size;
@@ -69,74 +71,76 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	}
 	CHECK_ERROR(err);
 
-	//이름이 vec_add인 커널 함수에 대한 커널 오브젝트 만들기
-	//@NOTE 커널 오브젝트는 프로그램이 빌드된 다음 만들어야 함
-	kernel = clCreateKernel(program, "vec_add", &err);
+	/*make kernel object for mat_mul.cl*/
+	//@NOTE kernel object should be made after program build
+	kernel = clCreateKernel(program, "mat_mul", &err);
 	CHECK_ERROR(err);
-
-	int *A = (int*)malloc(sizeof(int)*16384);
-	int *B = (int*)malloc(sizeof(int)*16384);
-	int *C = (int*)malloc(sizeof(int)*16384);
-	int i;
-
-	for(i=0;i<16384;i++){
-		A[i] = rand()%100;
-		B[i] = rand()%100;
-	}
 
 	cl_mem bufA, bufB, bufC;
-	bufA = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int)*16384, NULL, &err);
+	bufA= clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(float)*NDIM*NDIM, NULL, &err);
 	CHECK_ERROR(err);
-	bufB = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(int)*16384, NULL, &err);
+	bufB= clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(float)*NDIM*NDIM, NULL, &err);
 	CHECK_ERROR(err);
-	bufC = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(int)*16384, NULL, &err);
+	bufC= clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float)*NDIM*NDIM, NULL, &err);
 	CHECK_ERROR(err);
 
-	err = clEnqueueWriteBuffer(queue, bufA, CL_FALSE, 0, sizeof(int)*16384, A, 0, NULL, NULL);
+	/** HW: 크기가 큰 matrix를 위한 메모리를 할당하기 위한 동적 메모리 할당
+	*int *A = (int*)malloc(sizeof(int)*16384);
+	*int *B = (int*)malloc(sizeof(int)*16384);
+	*int *C = (int*)malloc(sizeof(int)*16384);
+	*int i;
+	*
+	*for(i=0;i<16384;i++){
+	*	A[i] = rand()%100;
+	*	B[i] = rand()%100;
+	*}
+	*
+	**/
+
+	/*write buffer*/
+	err = clEnqueueWriteBuffer(queue, bufA, CL_FALSE, 0, sizeof(int)*NDIM*NDIM, 0, NULL, NULL);
 	CHECK_ERROR(err);
-	err = clEnqueueWriteBuffer(queue, bufB, CL_FALSE, 0, sizeof(int)*16384, B, 0, NULL, NULL);
+	err = clEnqueueWriteBuffer(queue, bufB, CL_FALSE, 0, sizeof(int)*NDIM*NDIM, 0, NULL, NULL);
 	CHECK_ERROR(err);
 	//@NOTE blocking_write==CL_TRUE : 동기화를 의미. 버퍼쓰기가 완료된 다음에 return.
 	//@NOTE blocking_write==CL_FALSE : 비동기화를 의미. 커맨드가 큐에 enqueue되자마자 return. 완료시점파악을 위해 이벤트 사용.
 
-	//커널 인자 설정 : arg_value를 arg_index번 인자로 넘기기
+	/*커널 인자 설정: arg_value를 arg_index번 인자로 넘기기*/
 	err=clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufA);
 	CHECK_ERROR(err);
 	err=clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufB);
 	CHECK_ERROR(err);
 	err=clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufC);
 	CHECK_ERROR(err);
-
-	//커널 실행 : work_dim 차원의 커널 인덱스 공간을 만든다.
-	size_t global_size = 16384;
-	size_t local_size = 256;
-	err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+	err=clSetKernelArg(kernel, 3, sizeof(cl_mem), &NDIM);
+	CHECK_ERROR(err);
+	err=clSetKernelArg(kernel, 4, sizeof(cl_mem), &NDIM);
+	CHECK_ERROR(err);
+	err=clSetKernelArg(kernel, 5, sizeof(cl_mem), &NDIM);
 	CHECK_ERROR(err);
 
-	//버퍼 읽기
-	err = clEnqueueReadBuffer(queue, bufC, CL_TRUE, 0, sizeof(int)*16384, C, 0, NULL, NULL);
+	/*커널 실행 : work_dim 차원의 커널 인덱스 공간을 만든다.*/
+	size_t global_size[2] = {NDIM, NDIM};
+	size_t local_size[2] = {16,16};
+	global_size[0] = (global_size[0] + local_size[0] -1) / local_size[0] * local_size[0];
+	global_size[1] = (global_size[1] + local_size[1] -1) / local_size[1] * local_size[1];
+
+	err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, &global_size, &local_size, 0, NULL, NULL);
 	CHECK_ERROR(err);
 
-	for(i=0;i<16384; i++){
-		if(A[i] +B[i] != C[i]){
-			printf("Verification failed! A[%d] = %d, B[%d] = %d, C[%d] = %d\n", i, A[i], i, B[i], i, C[i]);
-			break;
-		}
-	}
-	if(i==16384)	printf("Verification success!\n");
+	err = clEnqueueReadBuffer(queue, bufC, CL_TRUE, 0, sizeof(float)*NDIM*NDIM, c, 0, NULL, NULL);
+	CHECK_ERROR(err);
 
 	clReleaseMemObject(bufA);
 	clReleaseMemObject(bufB);
 	clReleaseMemObject(bufC);
-	free(A);
-	free(B);
-	free(C);
 	clReleaseKernel(kernel);
 	clReleaseProgram(program);
 	clReleaseCommandQueue(queue);
 	clReleaseContext(context);
 
-
+/*then, what is this?
+ *
 	int i, j, k;
 	
 	// C = AB
@@ -150,6 +154,7 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 			}
 		}
 	}
+*/
 }
 
 /************************** DO NOT TOUCH BELOW HERE ******************************/
