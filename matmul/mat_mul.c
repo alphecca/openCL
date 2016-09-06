@@ -21,6 +21,8 @@ float c[NDIM][NDIM];
 int print_matrix = 0;
 int validation = 0;
 
+//TODO get_source_code
+
 void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 {
 	//declaration
@@ -113,9 +115,9 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	CHECK_ERROR(err);
 	err=clSetKernelArg(kernel, 3, sizeof(cl_mem), &NDIM);
 	CHECK_ERROR(err);
-	err=clSetKernelArg(kernel, 4, sizeof(cl_mem), &NDIM);
+	err=clSetKernelArg(kernel, 4, sizeof(cl_mem), &NDIM);//할 필요가 있나?
 	CHECK_ERROR(err);
-	err=clSetKernelArg(kernel, 5, sizeof(cl_mem), &NDIM);
+	err=clSetKernelArg(kernel, 5, sizeof(cl_mem), &NDIM);//할 필요가 있나?
 	CHECK_ERROR(err);
 
 	/*커널 실행 : work_dim 차원의 커널 인덱스 공간을 만든다.*/
