@@ -21,15 +21,13 @@ float c[NDIM][NDIM];
 int print_matrix = 0;
 int validation = 0;
 
-//TODO get_source_code
-
 void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 {
 	//declaration
 	cl_platform_id platform;
 	cl_device_id device;
 	cl_context context;
-	cl_command_queue queue;
+	cl_command_queue queue[2];//CPU-GPU간 통신-계산 중첩
 	cl_program program;
 	char *kernel_source;
 	size_t kernel_source_size;
@@ -47,7 +45,8 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	err=clCreateContext(NULL, 1, &device, NULL, NULL, &err);
 	CHECK_ERROR(err);
 
-	queue = clCreateCommandQueue(context, device, 0, &err);
+	queue[0] = clCreateCommandQueue(context, device, 0, &err);
+	queue[1] = clCreateCommandQueue(context, device, 0, &err);
 	CHECK_ERROR(err);
 
 	/*make program object*/
@@ -85,19 +84,6 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	bufC= clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float)*NDIM*NDIM, NULL, &err);
 	CHECK_ERROR(err);
 
-	/** HW: 크기가 큰 matrix를 위한 메모리를 할당하기 위한 동적 메모리 할당
-	*int *A = (int*)malloc(sizeof(int)*16384);
-	*int *B = (int*)malloc(sizeof(int)*16384);
-	*int *C = (int*)malloc(sizeof(int)*16384);
-	*int i;
-	*
-	*for(i=0;i<16384;i++){
-	*	A[i] = rand()%100;
-	*	B[i] = rand()%100;
-	*}
-	*
-	**/
-
 	/*write buffer*/
 	err = clEnqueueWriteBuffer(queue, bufA, CL_FALSE, 0, sizeof(int)*NDIM*NDIM, 0, NULL, NULL);
 	CHECK_ERROR(err);
@@ -115,18 +101,20 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	CHECK_ERROR(err);
 	err=clSetKernelArg(kernel, 3, sizeof(cl_mem), &NDIM);
 	CHECK_ERROR(err);
-	err=clSetKernelArg(kernel, 4, sizeof(cl_mem), &NDIM);//할 필요가 있나?
-	CHECK_ERROR(err);
-	err=clSetKernelArg(kernel, 5, sizeof(cl_mem), &NDIM);//할 필요가 있나?
-	CHECK_ERROR(err);
 
 	/*커널 실행 : work_dim 차원의 커널 인덱스 공간을 만든다.*/
 	size_t global_size[2] = {NDIM, NDIM};
+	//TODO how to find best size of work_groups?
 	size_t local_size[2] = {16,16};
-	global_size[0] = (global_size[0] + local_size[0] -1) / local_size[0] * local_size[0];
-	global_size[1] = (global_size[1] + local_size[1] -1) / local_size[1] * local_size[1];
 
-	err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, &global_size, &local_size, 0, NULL, NULL);
+	//TODO 통신-계산 중첩
+	err = clEnqueueNDRangeKernel(queue[0], kernel, 2, NULL, &global_size, &local_size, 0, NULL, NULL);
+	CHECK_ERROR(err);
+	err= clEnqueueBarrier(queue[0]);
+	CHECK_ERROR(err);
+	err = clEnqueueNDRangeKernel(queue[1], kernel, 2, NULL, &global_size, &local_size, 0, NULL, NULL);
+	CHECK_ERROR(err);
+	err= clEnqueueBarrier(queue);
 	CHECK_ERROR(err);
 
 	err = clEnqueueReadBuffer(queue, bufC, CL_TRUE, 0, sizeof(float)*NDIM*NDIM, c, 0, NULL, NULL);
@@ -139,23 +127,6 @@ void mat_mul( float c[NDIM][NDIM], float a[NDIM][NDIM], float b[NDIM][NDIM] )
 	clReleaseProgram(program);
 	clReleaseCommandQueue(queue);
 	clReleaseContext(context);
-
-/*then, what is this?
- *
-	int i, j, k;
-	
-	// C = AB
-	for( i = 0; i < NDIM; i++ )
-	{
-		for( j = 0; j < NDIM; j++ )
-		{
-			for( k = 0; k < NDIM; k++ )
-			{
-				c[i][j] += a[i][k] * b[k][j];
-			}
-		}
-	}
-*/
 }
 
 /************************** DO NOT TOUCH BELOW HERE ******************************/
